@@ -279,11 +279,3 @@ uint256 newYield = currentATokenBalance - _lastVaultBalance[asset];
    anvil --fork-url https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
    forge script script/DeployMultiTokenVault.s.sol --rpc-url http://localhost:8545 --broadcast
    ```
-
-## **License**
-
-MIT License - See LICENSE file for details
-
----
-
-**Note**: This project demonstrates advanced DeFi concepts including multi-asset vaults, yield generation, and verifiable randomness. All code has been tested on mainnet fork and includes comprehensive test coverage.
