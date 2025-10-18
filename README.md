@@ -222,8 +222,9 @@ uint256 newYield = currentATokenBalance - _lastVaultBalance[asset];
 2. **Liquidity**: MockDEX maintains sufficient liquidity for cross-asset swaps
 3. **Price Stability**: USD prices remain relatively stable during vault operations
 4. **MockDEX Exchange Rate**: Assumed 1:1 exchange rate between DAI and USDC for testing purposes
-5. **User Behavior**: Users understand the unified share system and cross-asset withdrawals
-6. **Admin Trust**: Vault admin acts in good faith for yield harvesting and distribution
+5. **Yield Simulation**: `simulateYield` function used for testing to demonstrate yield accrual without waiting for real Aave yield
+6. **User Behavior**: Users understand the unified share system and cross-asset withdrawals
+7. **Admin Trust**: Vault admin acts in good faith for yield harvesting and distribution
 
 ### **Design Decisions**
 
