@@ -702,7 +702,6 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, EIP712Upgradea
         address[] memory winners = new address[](winnerCount);
         address[] memory availableParticipants = new address[](_participants.length);
         
-        // Copy participants array
         for (uint256 i = 0; i < _participants.length; i++) {
             availableParticipants[i] = _participants[i];
         }
@@ -711,10 +710,8 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, EIP712Upgradea
         
         // Select winners using Fisher-Yates shuffle algorithm
         for (uint256 i = 0; i < winnerCount; i++) {
-            // Generate random index
             uint256 randomIndex = randomSeed % remainingCount;
             
-            // Select winner
             winners[i] = availableParticipants[randomIndex];
             
             // Move last element to selected position to avoid duplicates

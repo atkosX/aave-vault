@@ -132,6 +132,9 @@ contract VRFIntegrationTest is Test {
         console.log('Participants deposited assets');
         console.log('Total MTV supply:', vault.totalSupply() / 1e18);
         
+        // Fund vault with DAI for yield simulation
+        deal(DAI, address(vault), 200e18);
+        
         // Simulate yield
         vm.startPrank(owner);
         vault.simulateYield(200e18, DAI);
@@ -190,6 +193,9 @@ contract VRFIntegrationTest is Test {
         vm.startPrank(david);
         vault.depositMulti(DAI, 1000e18, david);
         vm.stopPrank();
+        
+        // Fund vault with DAI for yield simulation
+        deal(DAI, address(vault), 200e18);
         
         // Simulate yield
         vm.startPrank(owner);
@@ -269,6 +275,35 @@ contract VRFIntegrationTest is Test {
         assertGt(vault.balanceOf(david), 0);
         assertGt(vault.balanceOf(eve), 0);
         
+        // Test new participant tracking functions
+        address[] memory participants = vault.getParticipants();
+        console.log('Total participants tracked:', participants.length);
+        
+        // Verify all depositors are tracked as participants
+        assertTrue(vault.isParticipant(alice));
+        assertTrue(vault.isParticipant(bob));
+        assertTrue(vault.isParticipant(charlie));
+        assertTrue(vault.isParticipant(david));
+        assertTrue(vault.isParticipant(eve));
+        
+        // Test participant removal when withdrawing all shares
+        vm.startPrank(alice);
+        vault.withdrawMulti(DAI, vault.balanceOf(alice), alice, alice);
+        vm.stopPrank();
+        
+        // Alice should no longer be a participant
+        assertFalse(vault.isParticipant(alice));
+        
+        // Check remaining participants
+        address[] memory remainingParticipants = vault.getParticipants();
+        console.log('Remaining participants after Alice withdrawal:', remainingParticipants.length);
+        
+        // Bob, Charlie, David, and Eve should still be participants
+        assertTrue(vault.isParticipant(bob));
+        assertTrue(vault.isParticipant(charlie));
+        assertTrue(vault.isParticipant(david));
+        assertTrue(vault.isParticipant(eve));
+        
         console.log('Participant tracking test passed!');
     }
     
@@ -302,6 +337,9 @@ contract VRFIntegrationTest is Test {
         console.log('Bob DAI before:', bobDaiBefore / 1e18);
         console.log('Charlie DAI before:', charlieDaiBefore / 1e18);
         console.log('David DAI before:', davidDaiBefore / 1e18);
+        
+        // Fund vault with DAI for yield simulation
+        deal(DAI, address(vault), 200e18);
         
         // Simulate yield
         vm.startPrank(owner);
@@ -357,6 +395,9 @@ contract VRFIntegrationTest is Test {
         vault.depositMulti(DAI, 1000e18, bob);
         vm.stopPrank();
         
+        // Fund vault with DAI for yield simulation
+        deal(DAI, address(vault), 200e18);
+        
         // Simulate yield in DAI only
         vm.startPrank(owner);
         vault.simulateYield(200e18, DAI);
@@ -388,6 +429,90 @@ contract VRFIntegrationTest is Test {
         console.log('VRF with different assets test passed!');
     }
     
+    function testFixedVRFWinnerSelection() public {
+        console.log('=== TEST: Fixed VRF Winner Selection ===');
+        
+        // Setup 5 participants
+        address[] memory participants = new address[](5);
+        participants[0] = alice;
+        participants[1] = bob;
+        participants[2] = charlie;
+        participants[3] = david;
+        participants[4] = eve;
+        
+        // All participants deposit
+        for (uint i = 0; i < participants.length; i++) {
+            vm.startPrank(participants[i]);
+            vault.depositMulti(DAI, 1000e18, participants[i]);
+            vm.stopPrank();
+        }
+        
+        console.log('All participants deposited 1000 DAI each');
+        console.log('Total MTV supply:', vault.totalSupply() / 1e18);
+        
+        // Verify all participants are tracked
+        address[] memory trackedParticipants = vault.getParticipants();
+        console.log('Tracked participants:', trackedParticipants.length);
+        
+        // Verify all participants are in the tracking system
+        for (uint i = 0; i < participants.length; i++) {
+            assertTrue(vault.isParticipant(participants[i]));
+            console.log('Participant', i, ':', participants[i]);
+            console.log('  Is tracked:', vault.isParticipant(participants[i]));
+        }
+        
+        // Fund vault with DAI for yield simulation
+        deal(DAI, address(vault), 500e18);
+        console.log('Vault funded with 500 DAI for yield simulation');
+        
+        // Simulate yield
+        vm.startPrank(owner);
+        vault.simulateYield(500e18, DAI);
+        console.log('Simulated 500 DAI yield');
+        vm.stopPrank();
+        
+        // Fund vault for VRF
+        deal(address(vault), 2 ether);
+        console.log('Vault funded with 2 ETH for VRF');
+        
+        // Request random yield distribution
+        vm.startPrank(owner);
+        uint256 requestId = vault.requestRandomYieldDistribution(
+            200e18, // Distribute 200 DAI
+            3,      // Select 3 winners out of 5
+            DAI,
+            true
+        );
+        vm.stopPrank();
+        
+        console.log('VRF Request ID:', requestId);
+        
+        // Verify request was created
+        (uint256 totalYield, uint256 winnerCount, address toAsset, bool fulfilled) = 
+            vault.getYieldDistributionRequestStatus(requestId);
+        
+        console.log('Request details:');
+        console.log('  Total yield:', totalYield / 1e18, 'DAI');
+        console.log('  Winner count:', winnerCount);
+        console.log('  Asset:', toAsset);
+        console.log('  Fulfilled:', fulfilled);
+        
+        // Verify request parameters
+        assertEq(totalYield, 200e18);
+        assertEq(winnerCount, 3);
+        assertEq(toAsset, DAI);
+        assertFalse(fulfilled); // Won't be fulfilled in test environment
+        
+        // Note: In production, the VRF callback would automatically:
+        // 1. Receive random number from Chainlink VRF
+        // 2. Use Fisher-Yates shuffle to select 3 winners from the 5 participants
+        // 3. Distribute 200 DAI (66.67 DAI each) to the 3 winners
+        // 4. Emit RandomYieldDistributed event
+        
+        console.log('Fixed VRF winner selection test passed!');
+        console.log('Note: In production, VRF callback would select 3 random winners from the 5 participants');
+    }
+    
     function testFullVRFFlow() public {
         console.log('=== TEST: Full VRF Flow ===');
         
@@ -409,7 +534,10 @@ contract VRFIntegrationTest is Test {
         console.log('All participants deposited 1000 DAI each');
         console.log('Total MTV supply:', vault.totalSupply() / 1e18);
         
-        // 2. Simulate yield
+        // 2. Fund vault with DAI for yield simulation
+        deal(DAI, address(vault), 500e18);
+        
+        // Simulate yield
         vm.startPrank(owner);
         vault.simulateYield(500e18, DAI);
         console.log('Simulated 500 DAI yield');

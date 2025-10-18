@@ -18,9 +18,9 @@ import {IAToken} from "lib/aave-v3-origin/src/contracts/interfaces/IAToken.sol";
 import {DataTypes as AaveDataTypes} from "lib/aave-v3-origin/src/contracts/protocol/libraries/types/DataTypes.sol";
 import {WadRayMath} from "lib/aave-v3-origin/src/contracts/protocol/libraries/math/WadRayMath.sol";
 import {IRewardsController} from "lib/aave-v3-origin/src/contracts/rewards/interfaces/IRewardsController.sol";
-import {IATokenVault} from "./interfaces/IATokenVault.sol";
-import {MetaTxHelpers} from "./libraries/MetaTxHelpers.sol";
-import "./libraries/Constants.sol";
+import {IATokenVault} from "../interfaces/IATokenVault.sol";
+import {MetaTxHelpers} from "./MetaTxHelpers.sol";
+import "./Constants.sol";
 import {ATokenVaultStorage} from "./ATokenVaultStorage.sol";
 
 import {console} from "forge-std/console.sol";

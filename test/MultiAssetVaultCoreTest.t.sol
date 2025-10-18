@@ -183,6 +183,10 @@ contract MultiAssetVaultCoreTest is Test {
         console.log('Initial total value USD:', initialTotalValue / 1e18);
         console.log('Initial share value USD:', initialShareValue / 1e18);
         
+        // Fund vault with tokens for yield simulation
+        deal(DAI, address(vault), 100e18);
+        deal(USDC, address(vault), 50e6);
+        
         // Simulate yield generation
         vm.startPrank(owner);
         vault.simulateYield(100e18, DAI); // Simulate 100 DAI yield
@@ -213,6 +217,10 @@ contract MultiAssetVaultCoreTest is Test {
         vm.startPrank(bob);
         vault.depositMulti(USDC, 1000e6, bob);
         vm.stopPrank();
+        
+        // Fund vault with tokens for yield simulation
+        deal(DAI, address(vault), 100e18);
+        deal(USDC, address(vault), 50e6);
         
         // Simulate yield
         vm.startPrank(owner);
@@ -255,6 +263,9 @@ contract MultiAssetVaultCoreTest is Test {
         vm.startPrank(alice);
         vault.depositMulti(DAI, 1000e18, alice);
         vm.stopPrank();
+        
+        // Fund vault with tokens for yield simulation
+        deal(DAI, address(vault), 100e18);
         
         // Simulate yield to generate fees
         vm.startPrank(owner);
@@ -326,6 +337,116 @@ contract MultiAssetVaultCoreTest is Test {
         console.log('Swap-based withdrawals test passed!');
     }
     
+    function testVRFParticipantTracking() public {
+        console.log('=== TEST: VRF Participant Tracking ===');
+        
+        // Alice deposits DAI
+        vm.startPrank(alice);
+        uint256 aliceShares = vault.depositMulti(DAI, 1000e18, alice);
+        vm.stopPrank();
+        
+        // Bob deposits USDC
+        vm.startPrank(bob);
+        uint256 bobShares = vault.depositMulti(USDC, 1000e6, bob);
+        vm.stopPrank();
+        
+        // Charlie deposits WETH
+        vm.startPrank(charlie);
+        uint256 charlieShares = vault.depositMulti(WETH, 1e18, charlie);
+        vm.stopPrank();
+        
+        // Check participants
+        address[] memory participants = vault.getParticipants();
+        console.log('Total participants:', participants.length);
+        
+        // Verify all depositors are participants
+        assertTrue(vault.isParticipant(alice));
+        assertTrue(vault.isParticipant(bob));
+        assertTrue(vault.isParticipant(charlie));
+        
+        // Check participant shares
+        console.log('Alice shares:', vault.balanceOf(alice) / 1e18);
+        console.log('Bob shares:', vault.balanceOf(bob) / 1e18);
+        console.log('Charlie shares:', vault.balanceOf(charlie) / 1e18);
+        
+        // Alice withdraws all shares
+        vm.startPrank(alice);
+        vault.withdrawMulti(DAI, aliceShares, alice, alice);
+        vm.stopPrank();
+        
+        // Check Alice is no longer a participant
+        assertFalse(vault.isParticipant(alice));
+        
+        // Check remaining participants
+        address[] memory remainingParticipants = vault.getParticipants();
+        console.log('Remaining participants after Alice withdrawal:', remainingParticipants.length);
+        
+        // Bob and Charlie should still be participants
+        assertTrue(vault.isParticipant(bob));
+        assertTrue(vault.isParticipant(charlie));
+        
+        console.log('VRF participant tracking test passed!');
+    }
+    
+    function testVRFRequestAndStatus() public {
+        console.log('=== TEST: VRF Request and Status ===');
+        
+        // Setup participants
+        vm.startPrank(alice);
+        vault.depositMulti(DAI, 1000e18, alice);
+        vm.stopPrank();
+        
+        vm.startPrank(bob);
+        vault.depositMulti(USDC, 1000e6, bob);
+        vm.stopPrank();
+        
+        vm.startPrank(charlie);
+        vault.depositMulti(WETH, 1e18, charlie);
+        vm.stopPrank();
+        
+        // Fund vault with tokens for yield simulation
+        deal(DAI, address(vault), 100e18);
+        deal(USDC, address(vault), 50e6);
+        
+        // Simulate yield
+        vm.startPrank(owner);
+        vault.simulateYield(100e18, DAI);
+        vault.simulateYield(50e6, USDC);
+        vm.stopPrank();
+        
+        // Fund vault for VRF
+        deal(address(vault), 1 ether);
+        
+        // Request VRF distribution
+        vm.startPrank(owner);
+        uint256 requestId = vault.requestRandomYieldDistribution(
+            50e18, // 50 DAI total yield
+            2,     // 2 winners
+            DAI,   // Distribute in DAI
+            true   // Use ETH payment
+        );
+        vm.stopPrank();
+        
+        console.log('VRF Request ID:', requestId);
+        
+        // Check request status
+        (uint256 totalYield, uint256 winnerCount, address toAsset, bool fulfilled) = 
+            vault.getYieldDistributionRequestStatus(requestId);
+        
+        console.log('Request total yield:', totalYield / 1e18, 'DAI');
+        console.log('Request winner count:', winnerCount);
+        console.log('Request asset:', toAsset);
+        console.log('Request fulfilled:', fulfilled);
+        
+        // Verify request details
+        assertEq(totalYield, 50e18);
+        assertEq(winnerCount, 2);
+        assertEq(toAsset, DAI);
+        assertFalse(fulfilled); // Won't be fulfilled in test environment
+        
+        console.log('VRF request and status test passed!');
+    }
+    
     function testFullFlow() public {
         console.log('=== TEST: Full Flow ===');
         
@@ -340,7 +461,11 @@ contract MultiAssetVaultCoreTest is Test {
         console.log('Bob deposited 1000 USDC, got shares:', bobShares / 1e18);
         vm.stopPrank();
         
-        // 2. Yield simulation
+        // 2. Fund vault with tokens for yield simulation
+        deal(DAI, address(vault), 100e18);
+        deal(USDC, address(vault), 50e6);
+        
+        // Yield simulation
         vm.startPrank(owner);
         vault.simulateYield(100e18, DAI);
         vault.simulateYield(50e6, USDC);
@@ -375,6 +500,15 @@ contract MultiAssetVaultCoreTest is Test {
         
         uint256 aliceUsdcAfter = IERC20(USDC).balanceOf(alice);
         console.log('Alice withdrew as USDC:', (aliceUsdcAfter - aliceUsdcBefore) / 1e6);
+        
+        // 6. VRF participant tracking verification
+        console.log('VRF participants after full flow:');
+        address[] memory participants = vault.getParticipants();
+        console.log('Total participants:', participants.length);
+        for (uint i = 0; i < participants.length; i++) {
+            console.log('  Participant', i, ':', participants[i]);
+            console.log('    Shares:', vault.balanceOf(participants[i]) / 1e18);
+        }
         
         console.log('Full flow test passed!');
     }
