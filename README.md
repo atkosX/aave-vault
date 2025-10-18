@@ -1,5 +1,3 @@
-# Layer3 - Solidity Code Project
-
 ## **Objective**
 
 Build a vault that allows users to **deposit ERC20 tokens**, **safely withdraw their principal**, and **generate yield** through a real protocol integration **Aave**.
