@@ -12,6 +12,10 @@ This project takes **reference and inspiration** from [Aave's ATokenVault](https
 
 This project implements a **Multi-Token Vault** that integrates with **Aave V3** to provide yield generation across multiple ERC20 tokens. The vault supports both **custom yield distribution** using **Chainlink VRF** and **multi-asset management** with a unified interface.
 
+## **Demo Video**
+
+Project Overview: [Loom Demo Video](https://www.loom.com/share/3a53072a49c24ee992b81df158d65624)
+
 ## **Features Implemented**
 
 ### **1. Vault Core**
