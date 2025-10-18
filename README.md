@@ -16,27 +16,27 @@ This project implements a **Multi-Token Vault** that integrates with **Aave V3**
 
 ## **Features Implemented**
 
-### ✅ **1. Vault Core**
+### **1. Vault Core**
 
 - **Deposit/Withdraw**: Users can deposit and withdraw at any time
 - **Principal Protection**: Principal is always withdrawable (1:1 ratio maintained)
 - **Yield Accumulation**: Yield generated from Aave remains in vault until harvested
 - **Admin Control**: Only admin can harvest accumulated yield
 
-### ✅ **2. Aave Integration**
+### **2. Aave Integration**
 
 - **Protocol**: Integrated with Aave V3 on Ethereum Mainnet
 - **Tested Assets**: DAI and USDC
 - **Yield Generation**: Real yield accrual through aToken balances
 - **Testing**: Demonstrated on mainnet fork environment
 
-### ✅ **3. Custom Yield Distribution (VRF)**
+### **3. Custom Yield Distribution (VRF)**
 
 - **Random Selection**: Uses Chainlink VRF for fair winner selection
 - **Configurable**: Admin can set yield amount and winner count
 - **Transparency**: All requests and distributions are trackable
 
-### ✅ **4. Multi-Token Support**
+### **4. Multi-Token Support**
 
 - **Unified Interface**: Single vault for multiple ERC20 tokens
 - **Configurable**: Admin can add/remove supported assets
@@ -79,7 +79,6 @@ This project implements a **Multi-Token Vault** that integrates with **Aave V3**
   - Chainlink VRF for random yield distribution
   - Cross-asset deposit/withdrawal functionality
   - Admin controls for yield harvesting
-- **Size**: 731 lines, 30KB
 
 #### **MultiTokenVaultStorage.sol**
 
@@ -90,7 +89,6 @@ This project implements a **Multi-Token Vault** that integrates with **Aave V3**
   - USD value tracking
   - VRF state variables
   - MockDEX integration
-- **Size**: 44 lines, 1.3KB
 
 #### **MockDEX.sol**
 
@@ -101,7 +99,6 @@ This project implements a **Multi-Token Vault** that integrates with **Aave V3**
   - Quote and swap functions
   - Event logging for transactions
   - Decimal handling (DAI: 18 decimals, USDC: 6 decimals)
-- **Size**: 115 lines, 4.0KB
 
 ### **Key Features**
 
@@ -112,24 +109,19 @@ This project implements a **Multi-Token Vault** that integrates with **Aave V3**
 - **Admin Controls**: Secure yield harvesting and asset management
 - **Cross-Asset Swaps**: Flexible withdrawal options via MockDEX
 
-### **VRF Configuration**
-
-- **Chainlink VRF V2 Plus** integration
-- **Callback Gas Limit**: 100,000
-- **Request Confirmations**: 3
 
 ## **Testing**
 
 ### **Test Coverage**
 
-- ✅ **Deposits**: Multi-asset deposit functionality (DAI/USDC tested)
-- ✅ **Withdrawals**: Direct and cross-asset withdrawals (DAI↔USDC swaps)
-- ✅ **Yield Accrual**: Real yield generation through Aave
-- ✅ **Admin Harvest**: Yield extraction by admin
-- ✅ **VRF Integration**: Random yield distribution with mocked randomness
-- ✅ **MockDEX Testing**: DAI/USDC swap functionality
-- ✅ **Edge Cases**: Swap failures, insufficient liquidity
-- ✅ **Math Verification**: Correct yield distribution
+- **Deposits**: Multi-asset deposit functionality (DAI/USDC tested)
+- **Withdrawals**: Direct and cross-asset withdrawals (DAI↔USDC swaps)
+- **Yield Accrual**: Real yield generation through Aave
+- **Admin Harvest**: Yield extraction by admin
+- **VRF Integration**: Random yield distribution with mocked randomness
+- **MockDEX Testing**: DAI/USDC swap functionality
+- **Edge Cases**: Swap failures, insufficient liquidity
+- **Math Verification**: Correct yield distribution
 
 ### **VRF Testing Approach**
 
@@ -138,11 +130,6 @@ This project implements a **Multi-Token Vault** that integrates with **Aave V3**
 - **Algorithm Verification**: Winner selection algorithm is tested with known random seeds
 - **Production Ready**: In production, real Chainlink VRF provides cryptographically secure randomness
 
-### **Test Files**
-
-- `test/MultiAssetVaultCoreTest.t.sol` - Core functionality tests
-- `test/VRFIntegrationTest.t.sol` - VRF integration tests
-- `script/FinalComprehensiveTest.s.sol` - End-to-end testing
 
 ### **Running Tests**
 
@@ -225,12 +212,6 @@ uint256 newYield = currentATokenBalance - _lastVaultBalance[asset];
 - **Benefits**: Real yield generation, battle-tested security
 - **Integration**: Direct aToken balance tracking
 
-### **Chainlink VRF Selection**
-
-- **Reason**: Industry standard for verifiable randomness
-- **Benefits**: Fair distribution, tamper-proof
-- **Implementation**: VRF V2 Plus with wrapper pattern
-- **Testing**: Mocked random variables for deterministic testing in development environment
 
 ### **Multi-Asset Architecture**
 
@@ -265,13 +246,6 @@ uint256 newYield = currentATokenBalance - _lastVaultBalance[asset];
 4. **User Behavior**: Users understand the unified share system and cross-asset withdrawals
 5. **Admin Trust**: Vault admin acts in good faith for yield harvesting and distribution
 
-### **Security Assumptions**
-
-1. **Aave Security**: Aave V3 protocol is secure and battle-tested
-2. **Chainlink Security**: VRF service is tamper-proof and reliable
-3. **Oracle Accuracy**: Price oracle provides accurate and timely price feeds
-4. **Smart Contract Security**: No critical vulnerabilities in vault implementation
-5. **Access Control**: Only authorized admin can perform sensitive operations
 
 ### **Design Decisions**
 
