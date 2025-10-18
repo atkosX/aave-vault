@@ -107,7 +107,6 @@ This project implements a **Multi-Token Vault** that integrates with **Aave V3**
 - **Admin Controls**: Secure yield harvesting and asset management
 - **Cross-Asset Swaps**: Flexible withdrawal options via MockDEX
 
-
 ## **Testing**
 
 ### **Test Coverage**
@@ -127,7 +126,6 @@ This project implements a **Multi-Token Vault** that integrates with **Aave V3**
 - **Simulation**: Tests simulate the VRF callback process without requiring actual Chainlink VRF requests
 - **Algorithm Verification**: Winner selection algorithm is tested with known random seeds
 - **Production Ready**: In production, real Chainlink VRF provides cryptographically secure randomness
-
 
 ### **Running Tests**
 
@@ -210,48 +208,31 @@ uint256 newYield = currentATokenBalance - _lastVaultBalance[asset];
 - **Benefits**: Real yield generation, battle-tested security
 - **Integration**: Direct aToken balance tracking
 
-
 ### **Multi-Asset Architecture**
 
 - **Reason**: Unified interface for better UX
 - **Benefits**: Single vault for multiple tokens, cross-asset withdrawals
 - **Implementation**: ERC4626 standard with asset mapping
 
-## **Security Considerations**
-
-- **Access Control**: Only admin can harvest yield
-- **Principal Protection**: 1:1 withdrawal ratio maintained
-- **VRF Security**: Uses Chainlink's proven randomness
-- **Aave Integration**: Leverages Aave's security model
-- **Upgradeability**: Storage separation for future upgrades
-
 ## **Assumptions & Design Decisions**
-
-### **Technical Assumptions**
-
-1. **Aave V3 Availability**: Aave V3 protocol is operational and accessible on target network
-2. **Chainlink VRF**: VRF service is available and functioning for random number generation
-3. **Token Standards**: All supported tokens follow ERC20 standard with standard decimal places
-4. **Price Oracle**: Aave's price oracle provides accurate USD pricing for supported assets
-5. **Gas Availability**: Sufficient gas for VRF requests and complex operations
-6. **Network Stability**: Ethereum mainnet (or fork) is stable and accessible
 
 ### **Economic Assumptions**
 
 1. **Yield Rates**: Aave lending rates remain positive and sustainable
 2. **Liquidity**: MockDEX maintains sufficient liquidity for cross-asset swaps
 3. **Price Stability**: USD prices remain relatively stable during vault operations
-4. **User Behavior**: Users understand the unified share system and cross-asset withdrawals
-5. **Admin Trust**: Vault admin acts in good faith for yield harvesting and distribution
-
+4. **MockDEX Exchange Rate**: Assumed 1:1 exchange rate between DAI and USDC for testing purposes
+5. **User Behavior**: Users understand the unified share system and cross-asset withdrawals
+6. **Admin Trust**: Vault admin acts in good faith for yield harvesting and distribution
 
 ### **Design Decisions**
 
 1. **Unified Shares**: Chose single share token (MTV) for simplicity and cross-asset compatibility
 2. **USD Pricing**: Used USD as base currency for share calculations to handle multiple assets
 3. **MockDEX**: Created custom DEX for testing rather than integrating with real DEX (Uniswap)
-4. **VRF Integration**: Implemented VRF for fair random distribution rather than deterministic rules
-5. **Aave Integration**: Chose Aave over other protocols for its maturity and security track record
+4. **1:1 Exchange Rate**: Simplified MockDEX with 1:1 DAI/USDC rate for testing simplicity
+5. **VRF Integration**: Implemented VRF for fair random distribution rather than deterministic rules
+6. **Aave Integration**: Chose Aave over other protocols for its maturity and security track record
 
 ## **Getting Started**
 
