@@ -422,6 +422,9 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, EIP712Upgradea
         _totalDepositedValueUSD += valueUSD;
         _assetDepositedValueUSD[asset] += valueUSD;
         
+        // Add participant for VRF
+        _addParticipant(receiver);
+        
         return shares;
     }
 
@@ -445,6 +448,10 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, EIP712Upgradea
             }
             _burn(owner, shares);
             _baseWithdrawMulti(asset, requestedAmount, receiver);
+            
+            // Remove participant if no shares left
+            _removeParticipant(owner);
+            
             return requestedAmount;
         } else {
             // Need to swap other assets to get the requested asset
@@ -452,6 +459,10 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, EIP712Upgradea
                 _spendAllowance(owner, allowanceTarget, shares);
             }
             _burn(owner, shares);
+            
+            // Remove participant if no shares left
+            _removeParticipant(owner);
+            
             return _swapAndWithdraw(asset, requestedAmount, receiver);
         }
     }
@@ -546,8 +557,12 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, EIP712Upgradea
     // MOCK FUNCTION: Simulate yield generation for testing
     function simulateYield(uint256 amount, address asset) external onlyOwner {
         require(_isSupported[asset], 'Asset not supported');
-        address aToken = _assetToAToken[asset];
-        // Increase aToken balance to simulate yield generation
+        
+        // Supply real tokens to Aave to get real aTokens
+        IERC20(asset).approve(address(AAVE_POOL), amount);
+        AAVE_POOL.supply(asset, amount, address(this), REFERRAL_CODE);
+        
+        // Update tracking
         _lastVaultBalance[asset] += uint128(amount);
         emit YieldAccrued(asset, amount, _accumulatedFees[asset], _lastVaultBalance[asset]);
     }
@@ -647,26 +662,67 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, EIP712Upgradea
      * @notice Get total number of participants (MTV token holders)
      */
     function _getTotalParticipants() internal view returns (uint256) {
-        // For simplicity, we'll use total supply as proxy for participants
-        // In a real implementation, you might want to track unique holders
-        return totalSupply();
+        return _participants.length;
+    }
+    
+    /**
+     * @notice Add participant to VRF pool when they get shares
+     */
+    function _addParticipant(address participant) internal {
+        if (!_isParticipant[participant]) {
+            _participants.push(participant);
+            _isParticipant[participant] = true;
+        }
+    }
+    
+    /**
+     * @notice Remove participant from VRF pool when they have no shares
+     */
+    function _removeParticipant(address participant) internal {
+        if (_isParticipant[participant] && balanceOf(participant) == 0) {
+            _isParticipant[participant] = false;
+            // Remove from array (keep it simple for now)
+            for (uint256 i = 0; i < _participants.length; i++) {
+                if (_participants[i] == participant) {
+                    _participants[i] = _participants[_participants.length - 1];
+                    _participants.pop();
+                    break;
+                }
+            }
+        }
     }
 
     /**
      * @notice Select random winners from participants
      */
     function _selectRandomWinners(uint256 randomSeed, uint256 winnerCount) internal view returns (address[] memory) {
-        // This is a simplified implementation
-        // In practice, you'd need to maintain a list of all participants
-        // For now, we'll use a deterministic approach based on random seed
+        require(_participants.length > 0, 'No participants');
+        require(winnerCount <= _participants.length, 'Not enough participants');
         
         address[] memory winners = new address[](winnerCount);
+        address[] memory availableParticipants = new address[](_participants.length);
         
-        // Simple selection algorithm (not truly random for all participants)
-        // In production, maintain a participants array
+        // Copy participants array
+        for (uint256 i = 0; i < _participants.length; i++) {
+            availableParticipants[i] = _participants[i];
+        }
+        
+        uint256 remainingCount = _participants.length;
+        
+        // Select winners using Fisher-Yates shuffle algorithm
         for (uint256 i = 0; i < winnerCount; i++) {
-            // This is a placeholder - you'd need actual participant addresses
-            winners[i] = address(uint160(randomSeed + i));
+            // Generate random index
+            uint256 randomIndex = randomSeed % remainingCount;
+            
+            // Select winner
+            winners[i] = availableParticipants[randomIndex];
+            
+            // Move last element to selected position to avoid duplicates
+            availableParticipants[randomIndex] = availableParticipants[remainingCount - 1];
+            remainingCount--;
+            
+            // Use next part of random seed for next selection
+            randomSeed = uint256(keccak256(abi.encodePacked(randomSeed)));
         }
         
         return winners;
@@ -706,6 +762,20 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, EIP712Upgradea
     ) {
         YieldDistributionRequest memory request = _yieldDistributionRequests[requestId];
         return (request.totalYield, request.winnerCount, request.toAsset, request.fulfilled);
+    }
+    
+    /**
+     * @notice Get list of participants for VRF
+     */
+    function getParticipants() external view returns (address[] memory) {
+        return _participants;
+    }
+    
+    /**
+     * @notice Check if address is a participant
+     */
+    function isParticipant(address participant) external view returns (bool) {
+        return _isParticipant[participant];
     }
 
     /**

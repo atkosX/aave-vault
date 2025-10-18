@@ -38,6 +38,10 @@ abstract contract MultiTokenVaultStorage {
     uint256[] internal _requestIds;
     uint256 internal _lastRequestId;
     
+    // Participant tracking for VRF
+    address[] internal _participants;
+    mapping(address => bool) internal _isParticipant;
+    
     // Constants
     uint256 internal constant SCALE = 1e18;
 }
