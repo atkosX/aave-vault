@@ -2,7 +2,7 @@
 
 ## **Objective**
 
-Build a vault that allows users to **deposit ERC20 tokens**, **safely withdraw their principal**, and **generate yield** through a real protocol integration such as **Aave**.
+Build a vault that allows users to **deposit ERC20 tokens**, **safely withdraw their principal**, and **generate yield** through a real protocol integration **Aave**.
 
 All yield should be **trackable** and **fully extractable** by an admin or designated role.
 
@@ -41,7 +41,24 @@ This project implements a **Multi-Token Vault** that integrates with **Aave V3**
 - **Unified Interface**: Single vault for multiple ERC20 tokens
 - **Configurable**: Admin can add/remove supported assets
 - **Cross-Asset Withdrawals**: Users can withdraw in any supported token
-- **Swap Integration**: Automatic token swapping via MockDEX
+- **MockDEX Integration**: Custom DEX for seamless asset swapping
+- **Unified Share System**: Common shares calculated based on USD value
+
+## **Key Design Decisions**
+
+### **MockDEX for Cross-Asset Withdrawals**
+
+- **Purpose**: Created a custom MockDEX to enable depositors to withdraw any supported asset
+- **Functionality**: Handles DAI ↔ USDC swaps with 1:1 exchange rate
+- **Integration**: Automatically triggered when vault lacks sufficient requested asset
+- **Benefits**: Users can deposit DAI but withdraw USDC (or vice versa)
+
+### **Unified Share System**
+
+- **Common Shares**: All depositors receive the same share token (MTV) regardless of deposit asset
+- **USD-Based Calculation**: Share value calculated using USD price oracle
+- **Proportional Ownership**: Each share represents proportional ownership of total vault value
+- **Cross-Asset Value**: Share value reflects combined value of all supported assets
 
 ## **Architecture**
 
@@ -95,56 +112,11 @@ This project implements a **Multi-Token Vault** that integrates with **Aave V3**
 - **Admin Controls**: Secure yield harvesting and asset management
 - **Cross-Asset Swaps**: Flexible withdrawal options via MockDEX
 
-## **Deployment**
-
-### **Network**
-
-- **Ethereum Mainnet Fork** (for testing)
-- **Aave V3 Integration** for yield generation
-
-### **Supported Assets**
-
-- **DAI** (18 decimals)
-- **USDC** (6 decimals)
-
 ### **VRF Configuration**
 
 - **Chainlink VRF V2 Plus** integration
 - **Callback Gas Limit**: 100,000
 - **Request Confirmations**: 3
-
-## **Usage**
-
-### **For Users**
-
-```solidity
-// Deposit tokens
-vault.depositMulti(DAI, 1000e18, user);
-
-// Withdraw in same token
-vault.withdrawMulti(DAI, shares, user, user);
-
-// Withdraw in different token (triggers swap)
-vault.withdrawMulti(USDC, shares, user, user);
-```
-
-### **For Admin**
-
-```solidity
-// Add new supported asset
-vault.addSupportedAsset(WETH);
-
-// Harvest accumulated yield
-vault.harvestYield(DAI);
-
-// Request random yield distribution
-vault.requestRandomYieldDistribution(
-    1000e18, // 1000 DAI yield
-    3,       // 3 winners
-    DAI,     // Distribute in DAI
-    true     // Pay with ETH
-);
-```
 
 ## **Testing**
 
@@ -154,10 +126,17 @@ vault.requestRandomYieldDistribution(
 - ✅ **Withdrawals**: Direct and cross-asset withdrawals (DAI↔USDC swaps)
 - ✅ **Yield Accrual**: Real yield generation through Aave
 - ✅ **Admin Harvest**: Yield extraction by admin
-- ✅ **VRF Integration**: Random yield distribution
+- ✅ **VRF Integration**: Random yield distribution with mocked randomness
 - ✅ **MockDEX Testing**: DAI/USDC swap functionality
 - ✅ **Edge Cases**: Swap failures, insufficient liquidity
 - ✅ **Math Verification**: Correct yield distribution
+
+### **VRF Testing Approach**
+
+- **Mocked Randomness**: For testing purposes, random numbers are mocked to ensure deterministic test results
+- **Simulation**: Tests simulate the VRF callback process without requiring actual Chainlink VRF requests
+- **Algorithm Verification**: Winner selection algorithm is tested with known random seeds
+- **Production Ready**: In production, real Chainlink VRF provides cryptographically secure randomness
 
 ### **Test Files**
 
@@ -178,22 +157,65 @@ forge test --match-test testSwapBasedWithdrawals
 forge test --fork-url https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
 ```
 
-## **Yield Logic**
+## **Yield Logic & Aave Integration**
 
-### **Yield Generation**
+### **How aToken Deposits Generate Yield from Aave**
 
-1. **Deposit**: User deposits ERC20 tokens
-2. **Aave Supply**: Tokens are supplied to Aave V3
-3. **aToken Accrual**: Yield accumulates in aToken balances
-4. **Tracking**: Vault tracks accumulated yield per asset
-5. **Harvest**: Admin can harvest yield to any supported asset
+#### **1. Deposit Process**
 
-### **Yield Distribution**
+```solidity
+// User deposits 1000 DAI
+vault.depositMulti(DAI, 1000e18, user);
 
-1. **VRF Request**: Admin requests random distribution
-2. **Winner Selection**: VRF selects random winners
-3. **Distribution**: Yield is distributed to selected winners
-4. **Transparency**: All distributions are logged and trackable
+// Vault automatically:
+// 1. Transfers DAI from user to vault
+// 2. Supplies DAI to Aave V3 Pool
+// 3. Receives aDAI tokens in return
+// 4. Mints MTV shares to user based on USD value
+```
+
+#### **2. Yield Accrual Mechanism**
+
+- **aToken Balance Growth**: aDAI balance increases over time due to Aave's lending yield
+- **Real Yield**: Not simulated - actual interest earned from Aave's lending pool
+- **Automatic Compounding**: Yield is automatically reinvested in the aToken
+- **Transparent Tracking**: Vault tracks aToken balance changes to measure yield
+
+#### **3. Yield Calculation**
+
+```solidity
+// Yield = Current aToken Balance - Last Recorded Balance
+uint256 newYield = currentATokenBalance - _lastVaultBalance[asset];
+
+// Example:
+// Initial: 1000 aDAI
+// After 1 day: 1000.1 aDAI (0.1 DAI yield)
+// Yield = 1000.1 - 1000 = 0.1 DAI
+```
+
+#### **4. Yield Distribution Options**
+
+**Option A: Admin Harvest**
+
+- Admin calls `harvestYield(asset)` to extract accumulated yield
+- Yield is withdrawn from Aave and sent to admin
+- Vault's aToken balance decreases by yield amount
+
+**Option B: VRF Random Distribution**
+
+- Admin calls `requestRandomYieldDistribution()`
+- Chainlink VRF selects random winners from participants
+- Yield is distributed directly to winners' addresses
+- Creates a lottery system for yield distribution
+
+### **Yield Generation Flow**
+
+1. **User Deposit**: User deposits ERC20 tokens (DAI/USDC)
+2. **Aave Supply**: Vault supplies tokens to Aave V3 lending pool
+3. **aToken Receipt**: Vault receives aTokens (aDAI/aUSDC) representing deposit + yield
+4. **Yield Accrual**: aToken balance increases over time due to Aave's lending interest
+5. **Yield Tracking**: Vault monitors aToken balance changes to calculate yield
+6. **Yield Distribution**: Admin can harvest or distribute yield via VRF lottery
 
 ## **Protocol Integration Choices**
 
@@ -208,6 +230,7 @@ forge test --fork-url https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
 - **Reason**: Industry standard for verifiable randomness
 - **Benefits**: Fair distribution, tamper-proof
 - **Implementation**: VRF V2 Plus with wrapper pattern
+- **Testing**: Mocked random variables for deterministic testing in development environment
 
 ### **Multi-Asset Architecture**
 
@@ -223,13 +246,40 @@ forge test --fork-url https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
 - **Aave Integration**: Leverages Aave's security model
 - **Upgradeability**: Storage separation for future upgrades
 
-## **Assumptions**
+## **Assumptions & Design Decisions**
 
-1. **Aave V3**: Assumes Aave V3 is available and functional
-2. **VRF Availability**: Assumes Chainlink VRF is operational
-3. **Token Standards**: All tokens follow ERC20 standard
-4. **Gas Costs**: VRF requests require sufficient gas
-5. **Liquidity**: MockDEX has sufficient liquidity for swaps
+### **Technical Assumptions**
+
+1. **Aave V3 Availability**: Aave V3 protocol is operational and accessible on target network
+2. **Chainlink VRF**: VRF service is available and functioning for random number generation
+3. **Token Standards**: All supported tokens follow ERC20 standard with standard decimal places
+4. **Price Oracle**: Aave's price oracle provides accurate USD pricing for supported assets
+5. **Gas Availability**: Sufficient gas for VRF requests and complex operations
+6. **Network Stability**: Ethereum mainnet (or fork) is stable and accessible
+
+### **Economic Assumptions**
+
+1. **Yield Rates**: Aave lending rates remain positive and sustainable
+2. **Liquidity**: MockDEX maintains sufficient liquidity for cross-asset swaps
+3. **Price Stability**: USD prices remain relatively stable during vault operations
+4. **User Behavior**: Users understand the unified share system and cross-asset withdrawals
+5. **Admin Trust**: Vault admin acts in good faith for yield harvesting and distribution
+
+### **Security Assumptions**
+
+1. **Aave Security**: Aave V3 protocol is secure and battle-tested
+2. **Chainlink Security**: VRF service is tamper-proof and reliable
+3. **Oracle Accuracy**: Price oracle provides accurate and timely price feeds
+4. **Smart Contract Security**: No critical vulnerabilities in vault implementation
+5. **Access Control**: Only authorized admin can perform sensitive operations
+
+### **Design Decisions**
+
+1. **Unified Shares**: Chose single share token (MTV) for simplicity and cross-asset compatibility
+2. **USD Pricing**: Used USD as base currency for share calculations to handle multiple assets
+3. **MockDEX**: Created custom DEX for testing rather than integrating with real DEX (Uniswap)
+4. **VRF Integration**: Implemented VRF for fair random distribution rather than deterministic rules
+5. **Aave Integration**: Chose Aave over other protocols for its maturity and security track record
 
 ## **Getting Started**
 

@@ -44,7 +44,8 @@ contract MultiAssetVaultCoreTest is Test {
     
     function setUp() public {
         // Fork mainnet
-        vm.createSelectFork('https://eth-mainnet.g.alchemy.com/v2/LF_kKjuhP-n6j9O-jWcg9o94UWKNtoCf');
+        API_KEY = vm.envString('ALCHEMY_API_KEY');
+        vm.createSelectFork('https://eth-mainnet.g.alchemy.com/v2/' + API_KEY);
         
         // Deploy MockDEX
         mockDEX = new MockDEX(DAI, USDC);
