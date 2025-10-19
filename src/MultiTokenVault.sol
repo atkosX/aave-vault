@@ -43,7 +43,7 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, PausableUpgrad
     IPoolAddressesProvider public immutable POOL_ADDRESSES_PROVIDER;
     IPool public immutable AAVE_POOL;
     uint16 public immutable REFERRAL_CODE;
-    address public constant PRICE_ORACLE = 0x54586bE62E3c3580375aE3723C145253060Ca0C2; // Aave V3 Price Oracle
+    address public constant PRICE_ORACLE = 0x54586bE62E3c3580375aE3723C145253060Ca0C2; // Aave V3 Price Oracle, using single price for assignment purposes
     
     // VRF Configuration
     address public constant LINK_ADDRESS = 0x514910771AF9Ca656af840dff83E8264EcF986CA; // LINK token
@@ -283,7 +283,6 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, PausableUpgrad
         emit FeeUpdated(oldFee, newFee);
     }
 
-    // Update withdrawFees to handle fees withdrawal across all assets
     function withdrawFees(address asset, address to, uint256 amount) public onlyOwner whenNotPaused nonReentrant {
         require(_isSupported[asset], 'Asset not supported');
         _accrueYield();
@@ -291,7 +290,6 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, PausableUpgrad
 
         _accumulatedFees[asset] -= amount;
         
-        // Withdraw from Aave to get the underlying asset
         AAVE_POOL.withdraw(asset, amount, to);
 
         _lastVaultBalance[asset] = uint128(IAToken(_assetToAToken[asset]).balanceOf(address(this)));
@@ -323,6 +321,7 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, PausableUpgrad
         require(_isSupported[toAsset], 'Asset not supported');
 
         // Calculate total yield in USD
+
         uint256 currentTotalValue = getTotalValueUSD();
         uint256 totalDepositedValue = _totalDepositedValueUSD;
         uint256 yieldUSD = currentTotalValue > totalDepositedValue ? currentTotalValue - totalDepositedValue : 0;
@@ -330,13 +329,11 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, PausableUpgrad
         if (yieldUSD > 0) {
             // Convert yield to requested asset
             uint256 price = IPriceOracle(PRICE_ORACLE).getAssetPrice(toAsset);
-            uint256 decimals = 18; // Assume 18 decimals for simplicity
+            uint256 decimals = 18;
             
-            // Price oracle returns prices in 8 decimals, so we need to adjust
-            uint256 adjustedPrice = price * (10 ** (18 - 8)); // Convert from 8 to 18 decimals
+            uint256 adjustedPrice = price * (10 ** (18 - 8));
             uint256 yieldAmount = yieldUSD.mulDiv(10 ** decimals, adjustedPrice, Math.Rounding.Floor);
-
-            // Withdraw from Aave
+ 
             AAVE_POOL.withdraw(toAsset, yieldAmount, owner());
 
             emit YieldHarvested(owner(), toAsset, yieldAmount);
@@ -383,12 +380,10 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, PausableUpgrad
         _supportedAssets.push(asset);
         _isSupported[asset] = true;
 
-        // Approve Aave pool to spend the asset
         IERC20(asset).approve(address(AAVE_POOL), type(uint256).max);
     }
 
     function _removeSupportedAsset(address asset) internal {
-        // Remove from array (swap with last element)
         for (uint256 i = 0; i < _supportedAssets.length; i++) {
             if (_supportedAssets[i] == asset) {
                 _supportedAssets[i] = _supportedAssets[_supportedAssets.length - 1];
@@ -498,6 +493,7 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, PausableUpgrad
         uint256 price = IPriceOracle(PRICE_ORACLE).getAssetPrice(asset);
         
         // Handle different decimal places for different tokens
+        // Temporary fix for USDC
         uint256 decimals;
         if (asset == 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48) { // USDC
             decimals = 6;
@@ -505,9 +501,7 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, PausableUpgrad
             decimals = 18; // DAI, WETH, etc.
         }
         
-        // Price oracle returns prices in 8 decimals, so we need to adjust
-        // Convert price from 8 decimals to 18 decimals, then calculate USD value
-        uint256 adjustedPrice = price * (10 ** (18 - 8)); // Convert from 8 to 18 decimals
+        uint256 adjustedPrice = price * (10 ** (18 - 8));
         return adjustedPrice.mulDiv(amount, 10 ** decimals, Math.Rounding.Floor);
     }
     
@@ -522,8 +516,7 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, PausableUpgrad
             decimals = 18; // DAI, WETH, etc.
         }
         
-        // Price oracle returns prices in 8 decimals, so we need to adjust
-        uint256 adjustedPrice = price * (10 ** (18 - 8)); // Convert from 8 to 18 decimals
+        uint256 adjustedPrice = price * (10 ** (18 - 8));
         return usdValue.mulDiv(10 ** decimals, adjustedPrice, Math.Rounding.Floor);
     }
     
@@ -642,7 +635,6 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, PausableUpgrad
             );
         }
         
-        // Store request details
         _yieldDistributionRequests[requestId] = YieldDistributionRequest({
             totalYield: totalYield,
             winnerCount: winnerCount,
