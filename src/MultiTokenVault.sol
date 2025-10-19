@@ -5,6 +5,8 @@ pragma solidity ^0.8.26;
 
 import {ERC20Upgradeable} from 'lib/openzeppelin-contracts-upgradeable/contracts/token/ERC20/ERC20Upgradeable.sol';
 import {OwnableUpgradeable} from 'lib/openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol';
+import {PausableUpgradeable} from 'lib/openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol';
+import {ReentrancyGuard} from 'lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol';
 import {SafeERC20} from 'lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol';
 import {IERC20} from 'lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol';
 import {EIP712Upgradeable} from 'lib/openzeppelin-contracts-upgradeable/contracts/utils/cryptography/EIP712Upgradeable.sol';
@@ -34,7 +36,7 @@ interface IMockDEX {
  * @author Aave Protocol
  * @notice A multi-asset ERC-4626 vault for Aave V3, supporting multiple ERC20 tokens with unified shares.
  */
-contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, EIP712Upgradeable, MultiTokenVaultStorage, IMultiTokenVault, VRFV2PlusWrapperConsumerBase {
+contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, PausableUpgradeable, ReentrancyGuard, EIP712Upgradeable, MultiTokenVaultStorage, IMultiTokenVault, VRFV2PlusWrapperConsumerBase {
     using SafeERC20 for IERC20;
     using Math for uint256;
 
@@ -98,6 +100,7 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, EIP712Upgradea
         // Initialize inherited contracts
         __Ownable_init(owner);
         __ERC20_init(shareName, shareSymbol);
+        __Pausable_init();
         __EIP712_init(shareName, '1');
         _setFee(initialFee);
 
@@ -118,19 +121,19 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, EIP712Upgradea
                         ASSET MANAGEMENT
     //////////////////////////////////////////////////////////////*/
 
-    function addSupportedAsset(address asset) external onlyOwner {
+    function addSupportedAsset(address asset) external onlyOwner whenNotPaused {
         require(!_isSupported[asset], 'Asset already supported');
         _addSupportedAsset(asset);
         emit AssetAdded(asset, _assetToAToken[asset]);
     }
 
-    function addSupportedAsset(address asset, uint16 referralCode) external onlyOwner {
+    function addSupportedAsset(address asset, uint16 referralCode) external onlyOwner whenNotPaused {
         require(!_isSupported[asset], 'Asset already supported');
         _addSupportedAsset(asset);
         emit AssetAdded(asset, _assetToAToken[asset]);
     }
 
-    function removeSupportedAsset(address asset) external onlyOwner {
+    function removeSupportedAsset(address asset) external onlyOwner whenNotPaused {
         require(_isSupported[asset], 'Asset not supported');
         require(IAToken(_assetToAToken[asset]).balanceOf(address(this)) == 0, 'Asset has balance');
         _removeSupportedAsset(asset);
@@ -153,13 +156,13 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, EIP712Upgradea
                         DEPOSIT/WITHDRAWAL LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    function depositMulti(address asset, uint256 amount, address receiver) public returns (uint256) {
+    function depositMulti(address asset, uint256 amount, address receiver) public whenNotPaused nonReentrant returns (uint256) {
         require(_isSupported[asset], 'Asset not supported');
         require(amount > 0, 'Amount must be > 0');
         return _handleDepositMulti(asset, amount, receiver, msg.sender, false);
     }
 
-    function withdrawMulti(address asset, uint256 shares, address receiver, address owner) public returns (uint256) {
+    function withdrawMulti(address asset, uint256 shares, address receiver, address owner) public whenNotPaused nonReentrant returns (uint256) {
         require(_isSupported[asset], 'Asset not supported');
         require(shares > 0, 'Shares must be > 0');
         require(balanceOf(owner) >= shares, 'Insufficient shares');
@@ -227,7 +230,7 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, EIP712Upgradea
         assets = _getAssetAmountFromUSD(asset, shareOfValueUSD);
     }
     
-    function setMockDEX(address mockDEX) external onlyOwner {
+    function setMockDEX(address mockDEX) external onlyOwner whenNotPaused {
         _mockDEX = mockDEX;
     }
     
@@ -247,8 +250,32 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, EIP712Upgradea
                           ONLY OWNER FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
+    /**
+     * @notice Pause the contract
+     * @dev Pauses all state-changing functions except emergency functions
+     */
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    /**
+     * @notice Unpause the contract
+     * @dev Unpauses all state-changing functions
+     */
+    function unpause() external onlyOwner {
+        _unpause();
+    }
+
+    /**
+     * @notice Check if the contract is paused
+     * @return True if the contract is paused, false otherwise
+     */
+    function isPaused() external view returns (bool) {
+        return paused();
+    }
+
     // Update setFee to adjust the fee for all supported assets consistently
-    function setFee(uint256 newFee) public onlyOwner {
+    function setFee(uint256 newFee) public onlyOwner whenNotPaused {
         _accrueYield();
         require(newFee <= SCALE, 'FEE_TOO_HIGH');
         uint256 oldFee = _fee;
@@ -257,7 +284,7 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, EIP712Upgradea
     }
 
     // Update withdrawFees to handle fees withdrawal across all assets
-    function withdrawFees(address asset, address to, uint256 amount) public onlyOwner {
+    function withdrawFees(address asset, address to, uint256 amount) public onlyOwner whenNotPaused nonReentrant {
         require(_isSupported[asset], 'Asset not supported');
         _accrueYield();
         require(amount <= _accumulatedFees[asset], 'INSUFFICIENT_FEES');
@@ -272,7 +299,7 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, EIP712Upgradea
         emit FeesWithdrawn(to, amount, _lastVaultBalance[asset], _accumulatedFees[asset]);
     }
 
-    function claimRewards(address asset, address to) public onlyOwner {
+    function claimRewards(address asset, address to) public onlyOwner whenNotPaused nonReentrant {
         require(_isSupported[asset], 'Asset not supported');
         require(to != address(0), 'CANNOT_CLAIM_TO_ZERO_ADDRESS');
 
@@ -285,14 +312,14 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, EIP712Upgradea
         emit RewardsClaimed(to, rewardsList, claimedAmounts);
     }
 
-    function emergencyRescue(address token, address to, uint256 amount) public onlyOwner {
+    function emergencyRescue(address token, address to, uint256 amount) public onlyOwner nonReentrant {
         require(_isSupported[token] == false, 'CANNOT_RESCUE_SUPPORTED_ASSET');
         IERC20(token).safeTransfer(to, amount);
         emit EmergencyRescue(token, to, amount);
     }
 
     // Implement harvestYield to leverage multiple aTokens
-    function harvestYield(address toAsset) external onlyOwner {
+    function harvestYield(address toAsset) external onlyOwner whenNotPaused nonReentrant {
         require(_isSupported[toAsset], 'Asset not supported');
 
         // Calculate total yield in USD
@@ -555,7 +582,7 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, EIP712Upgradea
     }
 
     // MOCK FUNCTION: Simulate yield generation for testing
-    function simulateYield(uint256 amount, address asset) external onlyOwner {
+    function simulateYield(uint256 amount, address asset) external onlyOwner whenNotPaused nonReentrant {
         require(_isSupported[asset], 'Asset not supported');
         
         // Supply real tokens to Aave to get real aTokens
@@ -583,7 +610,7 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, EIP712Upgradea
         uint256 winnerCount,
         address toAsset,
         bool enableNativePayment
-    ) external onlyOwner returns (uint256) {
+    ) external onlyOwner whenNotPaused nonReentrant returns (uint256) {
         require(_isSupported[toAsset], 'Asset not supported');
         require(winnerCount > 0, 'Winner count must be > 0');
         require(totalYield > 0, 'Total yield must be > 0');
@@ -638,7 +665,7 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, EIP712Upgradea
     function fulfillRandomWords(
         uint256 _requestId,
         uint256[] memory _randomWords
-    ) internal override {
+    ) internal override nonReentrant {
         require(_yieldDistributionRequests[_requestId].totalYield > 0, 'Request not found');
         require(!_yieldDistributionRequests[_requestId].fulfilled, 'Request already fulfilled');
         
@@ -778,7 +805,7 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, EIP712Upgradea
     /**
      * @notice Withdraw LINK tokens
      */
-    function withdrawLink() external onlyOwner {
+    function withdrawLink() external onlyOwner whenNotPaused nonReentrant {
         LinkTokenInterface link = LinkTokenInterface(LINK_ADDRESS);
         require(link.transfer(owner(), link.balanceOf(address(this))), 'LINK transfer failed');
     }
@@ -786,7 +813,7 @@ contract MultiTokenVault is ERC20Upgradeable, OwnableUpgradeable, EIP712Upgradea
     /**
      * @notice Withdraw native ETH
      */
-    function withdrawNative(uint256 amount) external onlyOwner {
+    function withdrawNative(uint256 amount) external onlyOwner whenNotPaused nonReentrant {
         (bool success, ) = payable(owner()).call{value: amount}('');
         require(success, 'Native withdrawal failed');
     }

@@ -46,10 +46,14 @@ contract VRFIntegrationTest is Test {
     address aDAI;
     address aUSDC;
     
+    // Environment variable
+    string API_KEY;
+    
     function setUp() public {
         // Fork mainnet
         API_KEY = vm.envString('ALCHEMY_API_KEY');
-        vm.createSelectFork('https://eth-mainnet.g.alchemy.com/v2/' + API_KEY);
+        string memory forkUrl = string(abi.encodePacked('https://eth-mainnet.g.alchemy.com/v2/', API_KEY));
+        vm.createSelectFork(forkUrl);
         
         // Deploy MultiTokenVault
         vault = new MultiTokenVault(
